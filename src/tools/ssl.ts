@@ -1,0 +1,405 @@
+import { z } from "zod";
+
+import { PublicApiClient } from "../infomaniak/client.js";
+import {
+  consumeConfirmationToken,
+  mintConfirmationToken,
+} from "../runtime/confirmation-store.js";
+import { recordHistory } from "../runtime/history.js";
+
+import { defineTool } from "./types.js";
+
+const CertificateTypeSchema = z.enum(["free", "paid", "custom"]);
+
+const CertificateStatusSchema = z.object({
+  site_id: z.number(),
+  status: z.string(),
+  type: z.enum(["free", "paid", "custom"]).optional(),
+  sub_type: z.string().nullable().optional(),
+  issuer: z.string().nullable().optional(),
+  organization: z.string().nullable().optional(),
+  main_fqdn: z.string().optional(),
+  main_fqdn_idn: z.string().optional(),
+  emitted_at: z.number().nullable().optional(),
+  expired_at: z.number().nullable().optional(),
+  fingerprint_sha256: z.string().nullable().optional(),
+  is_valid: z.boolean().optional(),
+  is_expired: z.boolean().optional(),
+  is_selfsigned: z.boolean().optional(),
+  ignored_identifiers: z.array(z.unknown()).optional(),
+  error_identifiers: z.array(z.unknown()).optional(),
+  error_on_certificate: z.unknown().nullable().optional(),
+  last_attempt_at: z.number().nullable().optional(),
+});
+
+// get_certificate
+
+const GetCertificateInput = z.object({
+  hosting_id: z.number().int().positive(),
+  site_id: z.number().int().positive(),
+});
+
+const GetCertificateOutput = CertificateStatusSchema;
+
+export const getCertificateTool = defineTool({
+  name: "infomaniak_get_certificate",
+  description:
+    "Return the full SSL certificate detail for one site on a web hosting: provisioning state (`installed`, `updating`, `error`, ...), type (free/paid/custom) and sub-type (`lets_encrypt`, ...), issuer + organization, validity flags (`is_valid`, `is_expired`, `is_selfsigned`), issue and expiry timestamps, SHA-256 fingerprint, main FQDN in IDN form, ACME identifier errors and the timestamp of the last issuance attempt.",
+  inputSchema: GetCertificateInput,
+  outputSchema: GetCertificateOutput,
+  annotations: {
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  handler: async (input) => {
+    const client = new PublicApiClient();
+    const data = await client.request<unknown>(
+      "GET",
+      `/1/web_hostings/${input.hosting_id}/certificates/${input.site_id}`,
+    );
+    return CertificateStatusSchema.parse(data);
+  },
+});
+
+// request_certificate (issue / re-issue / renew)
+
+const RequestCertificateInput = z.object({
+  hosting_id: z
+    .number()
+    .int()
+    .positive()
+    .describe(
+      "Web hosting ID. Discover via infomaniak_find_site(domain) → hosting_id.",
+    ),
+  site_id: z
+    .number()
+    .int()
+    .positive()
+    .describe("Site ID on that hosting. Same source as hosting_id."),
+  type: CertificateTypeSchema.describe(
+    "Certificate kind: `free` (Let's Encrypt, no extra fields), `paid` (pre-purchased Sectigo, requires `certificate_id`), `custom` (bring-your-own PEM, requires `certificate` + `private_key`). Default workflow: `free`.",
+  ),
+  certificate_id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Pre-purchased certificate ID. REQUIRED when type=`paid`, ignored otherwise.",
+    ),
+  certificate: z
+    .string()
+    .optional()
+    .describe(
+      "PEM-encoded leaf certificate. REQUIRED when type=`custom`, ignored otherwise. Multi-line string starting with `-----BEGIN CERTIFICATE-----`.",
+    ),
+  private_key: z
+    .string()
+    .optional()
+    .describe(
+      "PEM-encoded private key matching `certificate`. REQUIRED when type=`custom`. Multi-line string starting with `-----BEGIN PRIVATE KEY-----` (or `RSA PRIVATE KEY`).",
+    ),
+  intermediate_certificate: z
+    .string()
+    .optional()
+    .describe(
+      "PEM-encoded intermediate CA chain. OPTIONAL for type=`custom` but recommended; without it some clients may fail trust validation.",
+    ),
+  confirmation_token: z
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Token from the prior plan response. Required on the apply phase only.",
+    ),
+});
+
+const RequestCertificateOutput = z.union([
+  z.object({
+    status: z.literal("plan"),
+    plan: z.object({
+      hosting_id: z.number(),
+      site_id: z.number(),
+      type: CertificateTypeSchema,
+      uses_certificate_id: z.boolean(),
+      uses_custom_pem: z.boolean(),
+    }),
+    confirmation_token: z.string(),
+    token_expires_at: z.string(),
+    next_step_markdown: z.string(),
+  }),
+  z.object({
+    status: z.literal("applied"),
+    operation_uuid: z.string().optional(),
+    message: z.string(),
+  }),
+]);
+
+export const requestCertificateTool = defineTool({
+  name: "infomaniak_request_certificate",
+  description:
+    "Request a new SSL certificate (or re-issue / renew an existing one) for a site on a web hosting. Two-phase commit. Three types supported: `free` (Let's Encrypt, no extra fields), `paid` (Sectigo, requires `certificate_id`), `custom` (BYO PEM, requires `certificate` + `private_key`). Returns an `operation_uuid`; poll `infomaniak_get_certificate` to track progress.",
+  inputSchema: RequestCertificateInput,
+  outputSchema: RequestCertificateOutput,
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  handler: async (input) => {
+    // Check certificate inputs before planning.
+    if (input.type === "paid" && input.certificate_id === undefined) {
+      throw new Error("`certificate_id` is required when type=paid.");
+    }
+    if (input.type === "custom" && (!input.certificate || !input.private_key)) {
+      throw new Error(
+        "`certificate` and `private_key` are required when type=custom.",
+      );
+    }
+
+    const fingerprint = JSON.stringify({
+      tool: "infomaniak_request_certificate",
+      hosting_id: input.hosting_id,
+      site_id: input.site_id,
+      type: input.type,
+      certificate_id: input.certificate_id ?? null,
+      certificate_hash: input.certificate ? hashShort(input.certificate) : null,
+      private_key_hash: input.private_key ? hashShort(input.private_key) : null,
+    });
+
+    if (!input.confirmation_token) {
+      const { token, expiresAt } = mintConfirmationToken(fingerprint);
+      return {
+        status: "plan" as const,
+        plan: {
+          hosting_id: input.hosting_id,
+          site_id: input.site_id,
+          type: input.type,
+          uses_certificate_id: input.certificate_id !== undefined,
+          uses_custom_pem: input.certificate !== undefined,
+        },
+        confirmation_token: token,
+        token_expires_at: expiresAt.toISOString(),
+        next_step_markdown: [
+          `## Plan — request SSL certificate`,
+          ``,
+          `- **Hosting**: ${input.hosting_id}`,
+          `- **Site**: ${input.site_id}`,
+          `- **Type**: \`${input.type}\``,
+          ...(input.type === "free"
+            ? [
+                `- Let's Encrypt — Infomaniak runs the ACME flow, allow up to a few minutes for ` +
+                  `propagation. The current certificate (if any) is replaced.`,
+              ]
+            : []),
+          ...(input.type === "paid"
+            ? [`- Sectigo paid certificate id: \`${input.certificate_id}\``]
+            : []),
+          ...(input.type === "custom"
+            ? [
+                `- Custom PEM, includes private key. Make sure the certificate is signed by ` +
+                  `a CA recognised by browsers, otherwise the site will display a security warning.`,
+              ]
+            : []),
+          ``,
+          `### Next step`,
+          `Re-call \`infomaniak_request_certificate\` with the same parameters AND \`confirmation_token: "${token}"\`.`,
+        ].join("\n"),
+      };
+    }
+    if (!consumeConfirmationToken(input.confirmation_token, fingerprint)) {
+      throw new Error(
+        "Confirmation token is invalid, expired, or doesn't match the parameters.",
+      );
+    }
+
+    const body: Record<string, unknown> = {
+      site_id: input.site_id,
+      type: input.type,
+    };
+    if (input.certificate_id !== undefined)
+      body["certificate_id"] = input.certificate_id;
+    if (input.certificate !== undefined)
+      body["certificate"] = input.certificate;
+    if (input.private_key !== undefined)
+      body["private_key"] = input.private_key;
+    if (input.intermediate_certificate !== undefined) {
+      body["intermediate_certificate"] = input.intermediate_certificate;
+    }
+
+    const client = new PublicApiClient();
+    const response = await client.request<{ uuid?: string }>(
+      "POST",
+      `/1/web_hostings/${input.hosting_id}/certificates`,
+      { body },
+    );
+
+    recordHistory({
+      tool: "infomaniak_request_certificate",
+      kind: "request_certificate",
+      summary: `Requested ${input.type} certificate for site ${input.site_id} on hosting ${input.hosting_id}`,
+      payload: {
+        hosting_id: input.hosting_id,
+        site_id: input.site_id,
+        type: input.type,
+        // Do not store certificate material in history.
+      },
+    });
+
+    return {
+      status: "applied" as const,
+      ...(response?.uuid !== undefined
+        ? { operation_uuid: response.uuid }
+        : {}),
+      message:
+        `✅ ${input.type === "free" ? "Let's Encrypt" : input.type} certificate ` +
+        `requested for site ${input.site_id}. Poll \`infomaniak_get_certificate\` to see when ` +
+        `\`status\` transitions from \`updating\` to \`ok\`.`,
+    };
+  },
+});
+
+// delete_certificate
+
+const DeleteCertificateInput = z.object({
+  hosting_id: z
+    .number()
+    .int()
+    .positive()
+    .describe(
+      "Web hosting ID. Discover via infomaniak_find_site(domain) → hosting_id.",
+    ),
+  site_id: z
+    .number()
+    .int()
+    .positive()
+    .describe("Site ID on that hosting. Same source as hosting_id."),
+  confirmation_token: z
+    .string()
+    .uuid()
+    .optional()
+    .describe(
+      "Token from the first (plan) phase. Re-pass to execute. Omit to receive the plan + token. Undo afterwards by calling infomaniak_request_certificate with type='free'.",
+    ),
+});
+
+const DeleteCertificateOutput = z.union([
+  z.object({
+    status: z.literal("plan"),
+    plan: z.object({
+      hosting_id: z.number(),
+      site_id: z.number(),
+      current_status: z.string().optional(),
+    }),
+    confirmation_token: z.string(),
+    token_expires_at: z.string(),
+    next_step_markdown: z.string(),
+  }),
+  z.object({
+    status: z.literal("applied"),
+    message: z.string(),
+  }),
+]);
+
+export const deleteCertificateTool = defineTool({
+  name: "infomaniak_delete_certificate",
+  description:
+    "Delete the SSL certificate of a site (the site will fall back to no HTTPS or Infomaniak's default cert until a new one is requested). Two-phase commit. The plan pulls the current certificate status so the caller can see what is about to be removed.",
+  inputSchema: DeleteCertificateInput,
+  outputSchema: DeleteCertificateOutput,
+  annotations: {
+    readOnlyHint: false,
+    destructiveHint: true,
+    idempotentHint: false,
+    openWorldHint: true,
+  },
+  handler: async (input) => {
+    const fingerprint = JSON.stringify({
+      tool: "infomaniak_delete_certificate",
+      hosting_id: input.hosting_id,
+      site_id: input.site_id,
+    });
+    if (!input.confirmation_token) {
+      // Fetch current certificate state.
+      const client = new PublicApiClient();
+      let currentStatus: string | undefined;
+      try {
+        const cur = await client.request<{ status?: string }>(
+          "GET",
+          `/1/web_hostings/${input.hosting_id}/certificates/${input.site_id}`,
+        );
+        currentStatus = cur?.status;
+      } catch {
+        // Continue without preview.
+      }
+      const { token, expiresAt } = mintConfirmationToken(fingerprint);
+      return {
+        status: "plan" as const,
+        plan: {
+          hosting_id: input.hosting_id,
+          site_id: input.site_id,
+          ...(currentStatus !== undefined
+            ? { current_status: currentStatus }
+            : {}),
+        },
+        confirmation_token: token,
+        token_expires_at: expiresAt.toISOString(),
+        next_step_markdown: [
+          `## Plan — delete SSL certificate`,
+          ``,
+          `- **Hosting**: ${input.hosting_id}`,
+          `- **Site**: ${input.site_id}`,
+          ...(currentStatus !== undefined
+            ? [`- **Current cert status**: \`${currentStatus}\``]
+            : []),
+          ``,
+          `### ⚠️ Side effects`,
+          `- HTTPS on this site will degrade until a new certificate is requested.`,
+          `- Visitors may see a browser security warning during that window.`,
+          ``,
+          `### Next step`,
+          `Re-call \`infomaniak_delete_certificate\` with the same parameters AND \`confirmation_token: "${token}"\`.`,
+        ].join("\n"),
+      };
+    }
+    if (!consumeConfirmationToken(input.confirmation_token, fingerprint)) {
+      throw new Error(
+        "Confirmation token is invalid, expired, or doesn't match the parameters.",
+      );
+    }
+    const client = new PublicApiClient();
+    await client.request<unknown>(
+      "DELETE",
+      `/1/web_hostings/${input.hosting_id}/certificates/${input.site_id}`,
+    );
+    recordHistory({
+      tool: "infomaniak_delete_certificate",
+      kind: "delete_certificate",
+      summary: `Deleted SSL certificate of site ${input.site_id} on hosting ${input.hosting_id}`,
+      payload: { hosting_id: input.hosting_id, site_id: input.site_id },
+      undo: {
+        tool: "infomaniak_request_certificate",
+        params: {
+          hosting_id: input.hosting_id,
+          site_id: input.site_id,
+          type: "free",
+        },
+        description: `Re-issue a free (Let's Encrypt) certificate`,
+      },
+    });
+    return {
+      status: "applied" as const,
+      message: `✅ Certificate of site ${input.site_id} removed.`,
+    };
+  },
+});
+
+// Helpers
+
+function hashShort(s: string): string {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return Math.abs(h).toString(36);
+}

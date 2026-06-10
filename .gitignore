@@ -1,0 +1,62 @@
+# Secrets and local credentials
+.env
+.env.*
+*.local
+*.local.json
+.npmrc
+/tokens/
+/credentials/
+/sessions/
+*.cookie
+*.session
+
+# Dependencies
+node_modules/
+
+# Build and package output
+dist/
+build/
+out/
+*.tsbuildinfo
+*.tgz
+
+# Tests and coverage
+coverage/
+.nyc_output/
+*.lcov
+
+# Runtime output
+logs/
+tmp/
+
+# Logs
+*.log
+npm-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Local agent memory
+.claude/
+CLAUDE.md
+
+# Local Infomaniak probes and scratch scripts
+/probe_*.mjs
+/grep_*.mjs
+/csrf_*.mjs
+/patch_test.mjs
+/real_routes.mjs
+/test_*.mjs
+/full_re.mjs
+/deep_re.mjs
+/check_state.mjs
+/.backups/
+.findings/

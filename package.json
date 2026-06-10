@@ -1,0 +1,80 @@
+{
+  "name": "@henrikogard/infomaniak-admin-mcp",
+  "version": "1.0.0",
+  "description": "Admin-focused Infomaniak MCP server with mail security and admin, account governance, kDrive/domain audits, persistent audit logging and confirmed writes",
+  "license": "MIT",
+  "author": "Henrik Øgård",
+  "homepage": "https://github.com/henrikogaard/infomaniak-admin-mcp#readme",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/henrikogaard/infomaniak-admin-mcp"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/henrikogaard/infomaniak-admin-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/henrikogaard/infomaniak-admin-mcp/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "infomaniak",
+    "webhosting",
+    "automation",
+    "agentic",
+    "claude",
+    "anthropic",
+    "kdrive",
+    "kchat",
+    "dns",
+    "mail"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "infomaniak-admin-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\" && tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && INFOMANIAK_API_TOKEN=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx LOG_LEVEL=silent vitest run",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "chrome-cookies-secure": "^3.0.2",
+    "pino": "^9.5.0",
+    "zod": "^3.23.8",
+    "zod-to-json-schema": "^3.23.5"
+  },
+  "overrides": {
+    "tar": "^7.4.3",
+    "@tootallnate/once": "^3.0.1",
+    "esbuild": "^0.25.0",
+    "vite": "^6.4.2",
+    "fast-uri": "^3.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.20",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.6"
+  },
+  "mcpName": "infomaniak-admin-mcp"
+}

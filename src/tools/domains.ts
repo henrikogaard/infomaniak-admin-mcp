@@ -1,0 +1,114 @@
+import { z } from "zod";
+
+import { PublicApiClient } from "../infomaniak/client.js";
+import { DomainSchema, ProductSchema } from "../schemas/infomaniak.js";
+import { defaultAccountId } from "../runtime/account-cache.js";
+
+import { defineTool } from "./types.js";
+
+// list_domains
+
+const ListDomainsInput = z.object({
+  account_id: z
+    .number()
+    .int()
+    .positive()
+    .optional()
+    .describe(
+      "Organization/account ID. Optional: defaults to the first account the token has access to. Discover via infomaniak_overview.",
+    ),
+});
+
+const ListDomainsOutput = z.object({
+  account_id: z.number(),
+  count: z.number(),
+  domains: z.array(
+    ProductSchema.pick({
+      id: true,
+      account_id: true,
+      service_name: true,
+      customer_name: true,
+      created_at: true,
+      expired_at: true,
+    }),
+  ),
+});
+
+export const listDomainsTool = defineTool({
+  name: "infomaniak_list_domains",
+  description:
+    "List every domain owned by an Infomaniak organization, with creation and expiration dates.",
+  inputSchema: ListDomainsInput,
+  outputSchema: ListDomainsOutput,
+  annotations: {
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  handler: async (input) => {
+    const accountId = input.account_id ?? (await defaultAccountId());
+    if (accountId === null) {
+      throw new Error(
+        "No account_id provided and the token reaches no accounts. Use infomaniak_overview to list available accounts.",
+      );
+    }
+    const client = new PublicApiClient();
+    const products = await client.request<Array<unknown>>(
+      "GET",
+      "/1/products",
+      {
+        query: { per_page: 500, account_id: accountId },
+      },
+    );
+    const domains = products
+      .map((p) => ProductSchema.parse(p))
+      .filter((p) => p.account_id === accountId && p.service_name === "domain")
+      .map(
+        ({
+          id,
+          account_id,
+          service_name,
+          customer_name,
+          created_at,
+          expired_at,
+        }) => ({
+          id,
+          account_id,
+          service_name,
+          customer_name,
+          ...(created_at !== undefined ? { created_at } : {}),
+          ...(expired_at !== undefined ? { expired_at } : {}),
+        }),
+      );
+    return { account_id: accountId, count: domains.length, domains };
+  },
+});
+
+// get_domain
+
+const GetDomainInput = z.object({
+  domain: z.string().min(3).describe("The domain name, e.g. 'example.com'"),
+});
+
+const GetDomainOutput = DomainSchema;
+
+export const getDomainTool = defineTool({
+  name: "infomaniak_get_domain",
+  description:
+    "Get detailed information about a domain (DNS management status, DNSSEC, IDN, errors).",
+  inputSchema: GetDomainInput,
+  outputSchema: GetDomainOutput,
+  annotations: {
+    readOnlyHint: true,
+    idempotentHint: true,
+    openWorldHint: true,
+  },
+  handler: async (input) => {
+    const client = new PublicApiClient();
+    const data = await client.request<unknown>(
+      "GET",
+      `/1/domain/${encodeURIComponent(input.domain)}`,
+    );
+    return DomainSchema.parse(data);
+  },
+});
