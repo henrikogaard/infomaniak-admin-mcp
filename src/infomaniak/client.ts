@@ -14,8 +14,14 @@ const log = childLogger({ module: "infomaniak/client" });
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
 
+export type QueryValue =
+  | string
+  | number
+  | boolean
+  | ReadonlyArray<string | number | boolean>;
+
 export interface RequestOptions {
-  query?: Record<string, string | number | boolean | undefined>;
+  query?: Record<string, QueryValue | undefined>;
   body?: unknown;
   headers?: Record<string, string>;
   timeoutMs?: number;
@@ -167,13 +173,19 @@ async function sendRequest<T>(
 function buildUrl(
   base: string,
   path: string,
-  query?: Record<string, string | number | boolean | undefined>,
+  query?: Record<string, QueryValue | undefined>,
 ): string {
   const url = new URL(path, base);
   if (query) {
     for (const [key, value] of Object.entries(query)) {
       if (value !== undefined) {
-        url.searchParams.set(key, String(value));
+        if (Array.isArray(value)) {
+          for (const item of value) {
+            url.searchParams.append(key, String(item));
+          }
+        } else {
+          url.searchParams.set(key, String(value));
+        }
       }
     }
   }

@@ -5,9 +5,9 @@
 `infomaniak-admin-mcp` is an admin-focused MCP server for
 Infomaniak tenant operations. It covers mail security and admin, account
 governance, kDrive and domain audits, hosting, DNS, DNSSEC, kChat governance,
-Node.js apps, AI inventory, persistent audit logs, and other tenant-level
-workflows. Writes use a two-phase confirm flow, so nothing changes until you
-approve it.
+Public Cloud, Swiss Backup, Node.js apps, AI usage inventory, persistent audit
+logs, and other tenant-level workflows. Writes use a two-phase confirm flow, so
+nothing changes until you approve it.
 
 ## Table of contents
 
@@ -535,6 +535,10 @@ user's local browser session or manual environment variables when needed.
   summary of the request and response.
 - `infomaniak_audit_log_tail` and `infomaniak_audit_log_search` are the best
   way to inspect what the MCP has been asked to do.
+- New kDrive activity/report tools support repeated array query parameters for
+  actions, files, and users. API payloads for evolving Public Cloud, account,
+  and backup resources remain pass-through objects where Infomaniak's schema is
+  product- or plan-dependent.
 
 ### Practical caveats this project keeps documented
 
@@ -1154,7 +1158,7 @@ small read-only sanity pass.
 
 ## All Tools
 
-169 tools across the admin surface. Use `infomaniak_tool_catalog` to browse what the MCP can do by category/risk, `infomaniak_help` to fuzzy-search by intent, or `infomaniak_explain` to dump a tool's full JSON schema. Admin-focused examples and scope boundaries are included in [Admin Scope](#admin-scope).
+221 tools across the admin surface. Use `infomaniak_tool_catalog` to browse what the MCP can do by category/risk, `infomaniak_help` to fuzzy-search by intent, or `infomaniak_explain` to dump a tool's full JSON schema. Admin-focused examples and scope boundaries are included in [Admin Scope](#admin-scope).
 
 ### Introspection (start here)
 | Tool | Annotation | Purpose |
@@ -1253,6 +1257,13 @@ small read-only sanity pass.
 | `infomaniak_manage_mail_webmail_access` | **destructive** | Two-phase webmail access add, update, revoke, or invite flows. |
 | `infomaniak_get_mail_device_access` | read-only | Mailbox device/session inventory for admin cleanup. |
 | `infomaniak_manage_mail_device_access` | **destructive** | Two-phase mailbox device/session deletion or cleanup. |
+| `infomaniak_list_email_imports` | read-only | Email-import history and job state for a mailbox. |
+| `infomaniak_manage_mailbox_filter_lifecycle` | **destructive** | Two-phase filter/script activation and filter ordering. |
+| `infomaniak_empty_mailbox_trash` | **destructive** | Two-phase permanent deletion of all messages in mailbox Trash. |
+| `infomaniak_list_mailing_lists` | read-only | Mailing-list inventory for a mail hosting. |
+| `infomaniak_list_service_auto_replies` | read-only | Service-level auto-reply inventory. |
+| `infomaniak_get_mail_preferences` | read-only | Service-level mail preferences. |
+| `infomaniak_list_service_filter_models` | read-only | Reusable service-level filter models. |
 | `infomaniak_get_newsletter_admin` | read-only | Newsletter groups and subscriber inventory for a domain. |
 | `infomaniak_manage_newsletter_admin` | **destructive** | Two-phase newsletter group/subscriber create, update, delete, assign, unassign, and forget operations. |
 
@@ -1304,6 +1315,8 @@ small read-only sanity pass.
 | `infomaniak_create_account_tag` | **destructive** | Two-phase create of an account tag, guarded by the current tag list. |
 | `infomaniak_update_account_tag` | **destructive** | Two-phase update of an account tag, guarded by a fresh tag snapshot. |
 | `infomaniak_delete_account_tag` | **destructive** | Two-phase delete of an account tag, guarded by a fresh tag snapshot. |
+| `infomaniak_get_account_resources` | read-only | Public API account, product, service, tag, team, team-user, and B2B invitation drill-downs. |
+| `infomaniak_manage_account_invitation_b2b` | **destructive** | Two-phase B2B customer assignment/removal on an invitation. |
 
 ### Mail (deep)
 | Tool | Annotation | Purpose |
@@ -1315,6 +1328,8 @@ small read-only sanity pass.
 | Tool | Annotation | Purpose |
 |---|---|---|
 | `infomaniak_get_domain_full` | read-only | `auth_code` (EPP), transfer/trade status, glue records, TLD/registry, attached service, DNS detail + health, associated products, DNS logs URL. Accepts id or FQDN. |
+| `infomaniak_get_domain_resources` | read-only | Canonical v2 domain, zone, DNSSEC, and DNS-record reads. |
+| `infomaniak_manage_domain_nameservers` | **destructive** | Two-phase nameserver update or restoration of Infomaniak nameservers. |
 
 ### kDrive (deep, manager-private)
 | Tool | Annotation | Purpose |
@@ -1354,7 +1369,19 @@ small read-only sanity pass.
 | `infomaniak_list_drive_file_access_teams` | read-only | Team access entries for a kDrive file or folder. |
 | `infomaniak_list_drive_file_access_invitations` | read-only | Pending file-access invitations for a kDrive file or folder. |
 | `infomaniak_get_drive_statistics` | read-only | kDrive storage, activity, user activity, shared-file activity, and share-link activity charts/exports. |
+| `infomaniak_get_drive_activities` | read-only | Cursor-paginated activity history across users, files, actions, and time ranges. |
+| `infomaniak_get_drive_file_activities` | read-only | Activity history for one file or folder. |
+| `infomaniak_get_drive_root_activities` | read-only | Root-level file activity history. |
+| `infomaniak_list_drive_activity_reports` | read-only | Generated activity-report inventory. |
+| `infomaniak_get_drive_activity_report` | read-only | One generated activity report. |
+| `infomaniak_export_drive_activity_report` | read-only | Download a generated activity report. |
+| `infomaniak_create_drive_activity_report` | **destructive** | Two-phase asynchronous report generation. |
+| `infomaniak_delete_drive_activity_report` | **destructive** | Two-phase report deletion. |
 | `infomaniak_get_drive_settings` | read-only | Current kDrive AI, link, office, and preferences policy snapshot. |
+| `infomaniak_get_drive_user` | read-only | Full kDrive user snapshot. |
+| `infomaniak_list_drive_invitations` | read-only | Pending kDrive user invitations. |
+| `infomaniak_get_drive_invitation` | read-only | One pending kDrive invitation. |
+| `infomaniak_manage_drive_private_directory` | **destructive** | Two-phase private-directory size policy update. |
 | `infomaniak_create_drive_share_link` | **destructive** | Two-phase create of a kDrive share link, guarded by current share-link state. |
 | `infomaniak_update_drive_share_link` | **destructive** | Two-phase update of a kDrive share link, guarded by current share-link state. |
 | `infomaniak_remove_drive_share_link` | **destructive** | Two-phase removal of a kDrive share link, guarded by current share-link state. |
@@ -1389,12 +1416,37 @@ small read-only sanity pass.
 | Tool | Annotation | Purpose |
 |---|---|---|
 | `infomaniak_list_swiss_backups` | read-only | Swiss Backup slots on the account. |
+| `infomaniak_get_swiss_backup` | read-only | Swiss Backup subscription detail. |
+| `infomaniak_get_swiss_backup_acronis_info` | read-only | Acronis connection information. |
+| `infomaniak_list_swiss_backup_slots` | read-only | Slot inventory. |
+| `infomaniak_get_swiss_backup_slot` | read-only | One slot snapshot. |
+| `infomaniak_get_swiss_backup_pricing` | read-only | Pricing or price calculation. |
+| `infomaniak_manage_swiss_backup_slot` | **destructive** | Two-phase slot create/update/delete/enable/disable. |
+| `infomaniak_manage_swiss_backup_administrator` | **destructive** | Two-phase administrator create/update. |
+
+### Public Cloud
+| Tool | Annotation | Purpose |
+|---|---|---|
+| `infomaniak_list_public_clouds` / `infomaniak_get_public_cloud` | read-only | Public Cloud product inventory and detail. |
+| `infomaniak_get_public_cloud_status` | read-only | Current Public Cloud status feed. |
+| `infomaniak_list_public_cloud_projects` / `infomaniak_get_public_cloud_project` | read-only | Project inventory and detail. |
+| `infomaniak_list_public_cloud_project_users` | read-only | Project access inventory. |
+| `infomaniak_list_public_cloud_database_services` / `infomaniak_get_public_cloud_database_service` | read-only | DBaaS inventory and detail. |
+| `infomaniak_list_public_cloud_kubernetes_services` / `infomaniak_get_public_cloud_kubernetes_service` | read-only | KaaS inventory and detail. |
+| `infomaniak_list_public_cloud_resource_data` | read-only | Public Cloud configuration, regions, packs, types, and versions. |
+| `infomaniak_manage_public_cloud_project` | **destructive** | Two-phase project create/update/delete/invite. |
+| `infomaniak_manage_public_cloud_project_user` | **destructive** | Two-phase project-user create/update/delete/invite. |
+| `infomaniak_manage_public_cloud_database_service` | **destructive** | Two-phase DBaaS lifecycle and operational actions. |
+| `infomaniak_manage_public_cloud_kubernetes_service` | **destructive** | Two-phase KaaS lifecycle. |
 
 ### AI Tools
 | Tool | Annotation | Purpose |
 |---|---|---|
 | `infomaniak_list_ai_products` | read-only | AI subscriptions the account owns. |
 | `infomaniak_list_ai_models` | read-only | Public catalogue of Swiss-sovereign LLM/STT models. |
+| `infomaniak_get_ai_consumptions` | read-only | AI product usage/consumption records. |
+| `infomaniak_get_ai_batch_result` | read-only | Async AI batch status or output download. |
+| `infomaniak_list_ai_product_models` | read-only | Models exposed by one AI product's v2 OpenAI-compatible endpoint. |
 
 ### Workflows (multi-step)
 | Tool | Annotation | Purpose |

@@ -42,9 +42,9 @@ describe("infomaniak_api_coverage_report", () => {
                     endpoint: "/1/accounts/{account}/invitations/{invitation}",
                   },
                   {
-                    summary: "List services",
+                    summary: "Get billing",
                     method: "get",
-                    endpoint: "/1/accounts/{account_id}/services",
+                    endpoint: "/1/accounts/{account_id}/billing",
                   },
                 ],
               },
