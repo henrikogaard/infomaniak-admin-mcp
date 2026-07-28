@@ -30,7 +30,7 @@ The full boundary list is included below.
 
 ## 1.0 Launch Status
 
-`@henrikogard/infomaniak-admin-mcp` is published as version `1.0.0`.
+`@henrikogard/infomaniak-admin-mcp` is prepared for publication as version `1.1.0`.
 
 The current tree is npm-first: TypeScript strict, Vitest tests, build,
 and the package dry-run are the release checks. It has been exercised against a
