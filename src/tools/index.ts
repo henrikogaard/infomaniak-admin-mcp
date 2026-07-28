@@ -18,12 +18,23 @@ import {
   updateAccountTagTool,
   updateAccountTeamTool,
 } from "./account-admin.js";
+import {
+  getAccountResourcesTool,
+  getDomainResourcesTool,
+  manageAccountB2bTool,
+  manageDomainNameserversTool,
+} from "./account-domain-expansion.js";
 import { getAccountFullTool, listTeamsAndTagsTool } from "./account-deep.js";
 import {
   getAccountInvitationAccessTool,
   manageAccountInvitationAccessTool,
 } from "./account-invitation-access.js";
 import { listAiModelsTool, listAiProductsTool } from "./ai.js";
+import {
+  getAiBatchResultTool,
+  getAiConsumptionsTool,
+  listAiProductModelsTool,
+} from "./ai-expansion.js";
 import { apiCallTool } from "./api-call.js";
 import { apiCoverageReportTool } from "./api-coverage.js";
 import { auditLogSearchTool, auditLogTailTool } from "./audit-log.js";
@@ -76,6 +87,20 @@ import {
   updateDriveFileAccessUserTool,
   updateDriveUserTool,
 } from "./drive-admin.js";
+import {
+  createDriveActivityReportTool,
+  deleteDriveActivityReportTool,
+  exportDriveActivityReportTool,
+  getDriveActivitiesTool,
+  getDriveActivityReportTool,
+  getDriveFileActivitiesTool,
+  getDriveInvitationTool,
+  getDriveRootActivitiesTool,
+  getDriveUserTool,
+  listDriveActivityReportsTool,
+  listDriveInvitationsTool,
+  manageDrivePrivateDirectoryTool,
+} from "./kdrive-expansion.js";
 import {
   getDriveFullTool,
   listDriveTrashTool,
@@ -142,6 +167,15 @@ import {
   upsertMailboxFilterScriptTool,
 } from "./mail-security.js";
 import {
+  emptyMailboxTrashTool,
+  getMailPreferencesTool,
+  listEmailImportsTool,
+  listMailingListsTool,
+  listServiceAutoRepliesTool,
+  listServiceFilterModelsTool,
+  manageMailboxFilterLifecycleTool,
+} from "./mail-expansion.js";
+import {
   getMailSignaturesTool,
   manageMailSignaturesTool,
 } from "./mail-signatures.js";
@@ -166,6 +200,24 @@ import {
   nodejsAppThumbnailTool,
 } from "./nodejs.js";
 import { listOrganizationsTool } from "./organizations.js";
+import {
+  getPublicCloudProjectTool,
+  getPublicCloudDatabaseServiceTool,
+  getPublicCloudKubernetesServiceTool,
+  getPublicCloudTool,
+  listPublicCloudAccessesTool,
+  listPublicCloudDatabaseServicesTool,
+  listPublicCloudKubernetesServicesTool,
+  listPublicCloudProjectUsersTool,
+  listPublicCloudProjectsTool,
+  listPublicCloudResourceDataTool,
+  listPublicCloudsTool,
+  getPublicCloudStatusTool,
+  managePublicCloudDatabaseServiceTool,
+  managePublicCloudKubernetesServiceTool,
+  managePublicCloudProjectTool,
+  managePublicCloudProjectUserTool,
+} from "./public-cloud.js";
 import { overviewTool } from "./overview.js";
 import { getMyProfileTool, getMySecurityTool } from "./profile.js";
 import {
@@ -186,6 +238,15 @@ import {
   requestCertificateTool,
 } from "./ssl.js";
 import { listSwissBackupsTool } from "./swiss-backup.js";
+import {
+  getSwissBackupAcronisInfoTool,
+  getSwissBackupPricingTool,
+  getSwissBackupSlotTool,
+  getSwissBackupTool,
+  listSwissBackupSlotsTool,
+  manageSwissBackupAdministratorTool,
+  manageSwissBackupSlotTool,
+} from "./swiss-backup-expansion.js";
 import type { ToolDefinition } from "./types.js";
 import {
   createShortUrlTool,
@@ -235,10 +296,14 @@ export const tools: ReadonlyArray<ToolDefinition> = [
   createAccountTagTool,
   updateAccountTagTool,
   deleteAccountTagTool,
+  getAccountResourcesTool,
+  manageAccountB2bTool,
   listHostingsTool,
   listDomainsTool,
   getDomainTool,
   getDomainFullTool,
+  getDomainResourcesTool,
+  manageDomainNameserversTool,
   // Web hosting
   findSiteTool,
   listSitesTool,
@@ -295,6 +360,13 @@ export const tools: ReadonlyArray<ToolDefinition> = [
   deleteMailboxFilterTool,
   upsertMailboxFilterScriptTool,
   deleteMailboxFilterScriptTool,
+  listEmailImportsTool,
+  manageMailboxFilterLifecycleTool,
+  emptyMailboxTrashTool,
+  listMailingListsTool,
+  listServiceAutoRepliesTool,
+  getMailPreferencesTool,
+  listServiceFilterModelsTool,
   manageMailboxAliasesTool,
   manageMailboxForwardingTool,
   manageMailboxAutoReplyTool,
@@ -362,9 +434,41 @@ export const tools: ReadonlyArray<ToolDefinition> = [
   removeDriveTrashItemTool,
   updateDriveTrashSettingsTool,
   manageDriveSettingsTool,
+  getDriveActivitiesTool,
+  getDriveFileActivitiesTool,
+  getDriveRootActivitiesTool,
+  listDriveActivityReportsTool,
+  getDriveActivityReportTool,
+  exportDriveActivityReportTool,
+  createDriveActivityReportTool,
+  deleteDriveActivityReportTool,
+  getDriveUserTool,
+  listDriveInvitationsTool,
+  getDriveInvitationTool,
+  manageDrivePrivateDirectoryTool,
   // AI
   listAiProductsTool,
   listAiModelsTool,
+  getAiConsumptionsTool,
+  getAiBatchResultTool,
+  listAiProductModelsTool,
+  // Public Cloud
+  listPublicCloudsTool,
+  getPublicCloudTool,
+  listPublicCloudAccessesTool,
+  getPublicCloudStatusTool,
+  listPublicCloudProjectsTool,
+  getPublicCloudProjectTool,
+  listPublicCloudProjectUsersTool,
+  listPublicCloudDatabaseServicesTool,
+  getPublicCloudDatabaseServiceTool,
+  listPublicCloudKubernetesServicesTool,
+  getPublicCloudKubernetesServiceTool,
+  listPublicCloudResourceDataTool,
+  managePublicCloudProjectTool,
+  managePublicCloudProjectUserTool,
+  managePublicCloudDatabaseServiceTool,
+  managePublicCloudKubernetesServiceTool,
   // VPS
   listVpsTool,
   getVpsFullTool,
@@ -379,6 +483,13 @@ export const tools: ReadonlyArray<ToolDefinition> = [
   nodejsAppActionTool,
   // Swiss Backup
   listSwissBackupsTool,
+  getSwissBackupTool,
+  getSwissBackupAcronisInfoTool,
+  listSwissBackupSlotsTool,
+  getSwissBackupSlotTool,
+  getSwissBackupPricingTool,
+  manageSwissBackupSlotTool,
+  manageSwissBackupAdministratorTool,
   // URL Shortener
   listShortUrlsTool,
   shortUrlsQuotaTool,
