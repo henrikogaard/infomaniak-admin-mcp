@@ -1,6 +1,6 @@
 {
   "name": "@henrikogard/infomaniak-admin-mcp",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Admin-focused Infomaniak MCP server with mail security and admin, account governance, kDrive/domain audits, persistent audit logging and confirmed writes",
   "license": "MIT",
   "author": "Henrik Øgård",
